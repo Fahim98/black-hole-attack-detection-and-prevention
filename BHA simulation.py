@@ -1,199 +1,206 @@
 import pygame
 import random
-import math
-import numpy as np
+import pandas as pd
 
-class Packet:
-    def __init__(self, source, destination):
-        self.source = source
-        self.destination = destination
-        self.position = [source.x, source.y]
-        self.progress = 0
-        self.color = (255, 255, 255)  # White packet
-        self.is_intercepted = False
+# Load the dataset
+file_path = "black_hole_detection_data.csv"  # Replace with the correct path to your file
+data = pd.read_csv(file_path)
 
-class NetworkNode:
-    def __init__(self, x, y, node_id, is_malicious=False):
-        self.x = x
-        self.y = y
-        self.id = node_id
-        self.is_malicious = is_malicious
-        self.color = (0, 255, 0) if not is_malicious else (255, 165, 0)
-        self.size = 15
-        self.reputation = 1.0
-        self.energy = 100
-        self.packets_forwarded = 0
-        self.packets_dropped = 0
-        self.suspicious_score = 0
-        self.velocity_x = random.uniform(-1, 1)
-        self.velocity_y = random.uniform(-1, 1)
-        self.connections = []
-        self.node_type = "Normal" if not is_malicious else "Potential Black Hole"
+# Initialize pygame
+pygame.init()
 
-class BlackHoleDetectionSimulation:
-    def __init__(self, width=1400, height=900):
-        pygame.init()
-        self.screen = pygame.display.set_mode((width, height))
-        pygame.display.set_caption("Interactive Black Hole Detection Simulation")
-        
-        self.COLORS = {
-            'BACKGROUND': (20, 20, 40),
-            'NODE_NORMAL': (0, 255, 0),
-            'NODE_MALICIOUS': (255, 165, 0),
-            'NODE_DETECTED': (255, 0, 0),
-            'CONNECTION': (100, 100, 100),
-            'TEXT': (255, 255, 255),
-            'PACKET': (255, 255, 255)
-        }
-        
-        self.width = width
-        self.height = height
-        self.num_nodes = 30
-        self.malicious_ratio = 0.2
-        
-        self.nodes = []
-        self.packets = []
-        self.detected_nodes = set()
-        
-        self.clock = pygame.time.Clock()
-        self.running = True
-        self.paused = False
-        self.selected_node = None
-        self.font = pygame.font.Font(None, 24)
-        
-        self.create_network()
-    
-    def create_network(self):
-        num_malicious = int(self.num_nodes * self.malicious_ratio)
-        for i in range(self.num_nodes):
-            x = random.randint(50, self.width - 50)
-            y = random.randint(50, self.height - 50)
-            is_malicious = i < num_malicious
-            node = NetworkNode(x, y, i, is_malicious)
-            self.nodes.append(node)
-        self.create_network_connections()
-    
-    def create_network_connections(self):
-        for node in self.nodes:
-            potential_connections = [
-                other for other in self.nodes 
-                if other != node and 
-                math.sqrt((node.x - other.x)**2 + (node.y - other.y)**2) < 200
-            ]
-            node.connections = sorted(
-                potential_connections, 
-                key=lambda x: math.sqrt((node.x - x.x)**2 + (node.y - x.y)**2)
-            )[:4]
-    
-    def generate_packet(self):
-        if random.random() < 0.1:
-            source = random.choice(self.nodes)
-            destination = random.choice([node for node in self.nodes if node != source])
-            packet = Packet(source, destination)
-            if source.is_malicious and random.random() < 0.5:
-                packet.is_intercepted = True
-                packet.color = (255, 0, 0)
-            self.packets.append(packet)
-    
-    def update_packets(self):
-        for packet in self.packets[:]:
-            dx = packet.destination.x - packet.position[0]
-            dy = packet.destination.y - packet.position[1]
-            distance = math.sqrt(dx**2 + dy**2)
-            if distance > 5:
-                packet.position[0] += dx * 0.02
-                packet.position[1] += dy * 0.02
-            else:
-                if packet.is_intercepted:
-                    packet.source.suspicious_score += 1
-                self.packets.remove(packet)
-    
-    def detect_black_hole_nodes(self):
-        for node in self.nodes:
-            if node.is_malicious:
-                if (node.suspicious_score > 10 or 
-                    node.packets_dropped / max(node.packets_forwarded, 1) > 0.5):
-                    node.color = self.COLORS['NODE_DETECTED']
-                    node.node_type = "Confirmed Black Hole"
-                    self.detected_nodes.add(node.id)
-    
-    def render_network(self):
-        self.screen.fill(self.COLORS['BACKGROUND'])
-        
-        for node in self.nodes:
-            for connected_node in node.connections:
-                pygame.draw.line(self.screen, self.COLORS['CONNECTION'], (node.x, node.y), (connected_node.x, connected_node.y), 1)
-        
-        for node in self.nodes:
-            pygame.draw.circle(self.screen, node.color, (int(node.x), int(node.y)), node.size)
-            if self.selected_node == node.id:
-                self.display_node_details(node)
-        
-        for packet in self.packets:
-            pygame.draw.circle(self.screen, packet.color, (int(packet.position[0]), int(packet.position[1])), 5)
-        
-        stats = [
-            f"Total Nodes: {self.num_nodes}",
-            f"Malicious Nodes: {int(self.num_nodes * self.malicious_ratio)}",
-            f"Detected Black Holes: {len(self.detected_nodes)}",
-            f"Active Packets: {len(self.packets)}",
-            f"Status: {'Paused' if self.paused else 'Running'}"
-        ]
-        
-        for i, text in enumerate(stats):
-            text_surface = self.font.render(text, True, self.COLORS['TEXT'])
-            self.screen.blit(text_surface, (10, 10 + i * 25))
-    
-    def display_node_details(self, node):
-        details = [
-            f"Node ID: {node.id}",
-            f"Type: {node.node_type}",
-            f"Reputation: {node.reputation:.2f}",
-            f"Energy: {node.energy}",
-            f"Suspicious Score: {node.suspicious_score}",
-            f"Packets Forwarded: {node.packets_forwarded}",
-            f"Packets Dropped: {node.packets_dropped}"
-        ]
-        
-        for i, detail in enumerate(details):
-            text_surface = self.font.render(detail, True, self.COLORS['TEXT'])
-            self.screen.blit(text_surface, (self.width - 200, 10 + i * 20))
-    
-    def handle_click(self, pos):
-        for node in self.nodes:
-            distance = math.sqrt((pos[0] - node.x)**2 + (pos[1] - node.y)**2)
-            if distance < node.size:
-                self.selected_node = node.id if self.selected_node != node.id else None
-                node.is_malicious = not node.is_malicious
-                node.color = self.COLORS['NODE_MALICIOUS'] if node.is_malicious else self.COLORS['NODE_NORMAL']
-    
-    def run_simulation(self):
-        while self.running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
-                        self.paused = not self.paused
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    self.handle_click(pygame.mouse.get_pos())
-            
-            if not self.paused:
-                self.generate_packet()
-                self.update_packets()
-                self.detect_black_hole_nodes()
-                self.render_network()
-            
-            pygame.display.flip()
-            self.clock.tick(60)
-        
-        pygame.quit()
+# Constants
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+NODE_RADIUS = 10
+FONT_SIZE = 16
+FPS = 60
+MAX_NODES = 50  # Reduced for better clarity during animations
+PACKET_SPEED = 2  # Speed of moving packets
+TRUST_THRESHOLD_SUSPICIOUS = 0.4
+TRUST_THRESHOLD_BLACK_HOLE = 0.2
 
-def main():
-    random.seed(42)
-    np.random.seed(42)
-    simulation = BlackHoleDetectionSimulation(width=1400, height=900)
-    simulation.run_simulation()
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+YELLOW = (255, 255, 0)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+GRAY = (200, 200, 200)
 
-if __name__ == "__main__":
-    main()
+# Set up the screen
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Dynamic AODV Black Hole Attack Simulation")
+font = pygame.font.Font(None, FONT_SIZE)
+
+# Randomly select a subset of nodes for display
+sampled_data = data.sample(n=MAX_NODES)
+nodes = []
+for _, row in sampled_data.iterrows():
+    nodes.append({
+        "id": row["Node_ID"],
+        "type": row["Node_Type"],
+        "trust_value": random.uniform(0.0, 1.0),  # Randomized trust values for variability
+        "detection_confidence": random.uniform(0.0, 1.0),  # Randomized detection confidence
+        "energy": random.uniform(50.0, 100.0),  # Randomized energy levels
+        "position": [random.randint(NODE_RADIUS, SCREEN_WIDTH - NODE_RADIUS),
+                     random.randint(NODE_RADIUS, SCREEN_HEIGHT - NODE_RADIUS)],
+        "velocity": [random.choice([-1, 1]) * random.random() * 2,
+                     random.choice([-1, 1]) * random.random() * 2],
+        "packets_forwarded": 0,
+        "packets_dropped": 0,
+    })
+
+# Packet data for animation
+packets = []
+
+# Helper Functions
+def spawn_packet(source, target):
+    """Create a new packet traveling between two nodes."""
+    packets.append({
+        "source": source,
+        "target": target,
+        "position": source["position"][:],
+        "color": BLUE if source["type"] != "Confirmed Black Hole" else RED
+    })
+
+def update_node_type(node):
+    """Update the type of a node based on its trust value."""
+    if node["trust_value"] < TRUST_THRESHOLD_BLACK_HOLE:
+        node["type"] = "Confirmed Black Hole"
+    elif node["trust_value"] < TRUST_THRESHOLD_SUSPICIOUS:
+        node["type"] = "Suspicious"
+    else:
+        node["type"] = "Normal"
+
+def draw_nodes(selected_node=None):
+    """Draw nodes dynamically based on their type and optionally highlight a selected node."""
+    for node in nodes:
+        update_node_type(node)
+        if selected_node and node == selected_node:
+            color = (0, 128, 255)  # Highlight color for the selected node
+        else:
+            color = GREEN if node["type"] == "Normal" else YELLOW if node["type"] == "Suspicious" else RED
+        pygame.draw.circle(screen, color, node["position"], NODE_RADIUS)
+
+def display_node_details(node, position):
+    """Display detailed information about a node."""
+    details = [
+        f"ID: {node['id']}",
+        f"Type: {node['type']}",
+        f"Trust Value: {node['trust_value']:.2f}",
+        f"Detection Confidence: {node['detection_confidence']:.2f}",
+        f"Energy: {node['energy']:.2f}",
+        f"Packets Forwarded: {node['packets_forwarded']}",
+        f"Packets Dropped: {node['packets_dropped']}"
+    ]
+    x, y = position
+    pygame.draw.rect(screen, WHITE, (x - 10, y - 10, 200, len(details) * FONT_SIZE + 20))  # Background
+    pygame.draw.rect(screen, BLACK, (x - 10, y - 10, 200, len(details) * FONT_SIZE + 20), 2)  # Border
+    for i, line in enumerate(details):
+        text = font.render(line, True, BLACK)
+        screen.blit(text, (x, y + i * FONT_SIZE))
+
+def draw_packets():
+    """Draw packets."""
+    for packet in packets:
+        pygame.draw.circle(screen, packet["color"], (int(packet["position"][0]), int(packet["position"][1])), 5)
+
+def move_packets():
+    """Move packets and update node metrics."""
+    global packets
+    for packet in packets[:]:
+        source_pos = packet["source"]["position"]
+        target_pos = packet["target"]["position"]
+        dx = target_pos[0] - packet["position"][0]
+        dy = target_pos[1] - packet["position"][1]
+        dist = (dx**2 + dy**2)**0.5
+        if dist > PACKET_SPEED:
+            packet["position"][0] += PACKET_SPEED * dx / dist
+            packet["position"][1] += PACKET_SPEED * dy / dist
+        else:
+            # Packet reached target
+            packet["target"]["packets_forwarded"] += 1
+            packet["source"]["trust_value"] -= 0.01  # Degrade trust for dropped packets
+            packets.remove(packet)
+
+def move_nodes():
+    """Move nodes randomly on the screen."""
+    for node in nodes:
+        for i in range(2):  # Update x and y positions
+            node["position"][i] += node["velocity"][i]
+            if node["position"][i] < NODE_RADIUS or node["position"][i] > (SCREEN_WIDTH if i == 0 else SCREEN_HEIGHT) - NODE_RADIUS:
+                node["velocity"][i] *= -1  # Reverse direction
+
+def draw_legend():
+    """Draw a legend for the simulation."""
+    legend_items = [
+        ("Normal", GREEN),
+        ("Suspicious", YELLOW),
+        ("Confirmed Black Hole", RED),
+        ("Packet (Forwarded)", BLUE),
+        ("Packet (Dropped)", RED),
+    ]
+    x, y = SCREEN_WIDTH - 150, 10
+    for label, color in legend_items:
+        pygame.draw.circle(screen, color, (x, y), NODE_RADIUS)
+        text = font.render(label, True, BLACK)
+        screen.blit(text, (x + 20, y - NODE_RADIUS // 2))
+        y += 30
+
+def count_black_holes():
+    """Count the number of confirmed black holes."""
+    return sum(1 for node in nodes if node["type"] == "Confirmed Black Hole")
+
+# Main simulation loop
+running = True
+clock = pygame.time.Clock()
+selected_node = None
+SPAWN_INTERVAL = 50  # Frames
+spawn_counter = 0
+
+while running:
+    screen.fill(WHITE)
+    draw_nodes(selected_node)
+    draw_packets()
+    draw_legend()
+
+    # Display black hole count
+    black_hole_count = count_black_holes()
+    text = font.render(f"Black Holes Detected: {black_hole_count}", True, BLACK)
+    screen.blit(text, (10, SCREEN_HEIGHT - 30))
+
+    # Event handling
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            pos = pygame.mouse.get_pos()
+            for node in nodes:
+                node_pos = node["position"]
+                distance = ((pos[0] - node_pos[0]) ** 2 + (pos[1] - node_pos[1]) ** 2) ** 0.5
+                if distance <= NODE_RADIUS:
+                    selected_node = None if node == selected_node else node
+                    break
+
+    # Move and update packets and nodes
+    move_packets()
+    move_nodes()
+
+    # Periodically spawn packets
+    spawn_counter += 1
+    if spawn_counter >= SPAWN_INTERVAL:
+        spawn_counter = 0
+        if len(nodes) > 1:
+            source, target = random.sample(nodes, 2)
+            spawn_packet(source, target)
+
+    # Display node details if one is selected
+    if selected_node:
+        display_node_details(selected_node, (10, 10))
+
+    pygame.display.flip()
+    clock.tick(FPS)
+
+pygame.quit()
